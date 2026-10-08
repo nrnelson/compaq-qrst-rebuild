@@ -1,0 +1,132 @@
+"""Unit tests that need no QuickRestore CD (synthetic archives and boot sectors)."""
+import io
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+import zipfile
+
+from compaq_qrst import disk, qrzip
+from compaq_qrst.fat import ATTR_DIR, FatReader, FatWriter, tree_from_archives
+
+SFX_STUB = b'MZ' + bytes(510)
+
+
+def make_zip(entries):
+    """entries: [(name, data_or_None_for_dir, dos_attr)] -> a zip with an SFX-style stub."""
+    buf = io.BytesIO()
+    buf.write(SFX_STUB)
+    with zipfile.ZipFile(buf, 'a', zipfile.ZIP_DEFLATED) as z:
+        for name, data, attr in entries:
+            zi = zipfile.ZipInfo(name, (1995, 9, 16, 12, 0, 0))
+            zi.create_system = 0
+            zi.external_attr = attr
+            z.writestr(zi, b'' if data is None else data)
+    return buf.getvalue()
+
+
+def boot_template():
+    b = bytearray(512)
+    b[0:3] = b'\xeb\x3c\x90'
+    b[3:11] = b'TESTBOOT'
+    b[510:512] = b'\x55\xaa'
+    return bytes(b)
+
+
+class QrZipTest(unittest.TestCase):
+    def test_roundtrip(self):
+        plain = make_zip([('IO.SYS', b'x' * 1000, 0x27), ('DIR/', None, 0x30),
+                          ('DIR/FILE.TXT', b'hello', 0x20)])
+        scrambled = qrzip.encode(plain)
+        self.assertNotIn(b'PK\x01\x02', scrambled)
+        self.assertEqual(qrzip.decode(scrambled), plain)
+        z = qrzip.open_archive(scrambled)
+        self.assertEqual(z.read('DIR/FILE.TXT'), b'hello')
+
+    def test_rejects_plain_garbage(self):
+        with self.assertRaises(qrzip.QrZipError):
+            qrzip.decode(b'MZ' + bytes(100))
+
+
+class DiskTest(unittest.TestCase):
+    def test_lba_assisted_heads(self):
+        for sectors, heads in [(1_000_000, 16), (1_056_384, 32), (2_100_000, 64),
+                               (3_173_184, 64), (7_962_192, 128), (16_000_000, 255)]:
+            self.assertEqual(disk.lba_assisted_heads(sectors), heads, sectors)
+
+    def test_plan_4gb_cf(self):
+        L = disk.plan(7_962_192)
+        self.assertEqual((L.heads, L.diag_start, L.diag_sectors), (128, 63, 8001))
+        self.assertEqual((L.c_start, L.c_sectors, L.c_cluster_sectors), (8064, 4_193_280, 64))
+        self.assertLessEqual(L.c_sectors // 64, 65524)
+
+    def test_plan_small_disk_uses_whole_cylinders_for_diags(self):
+        L = disk.plan(3_173_184)                       # 1.6 GB factory drive
+        self.assertEqual(L.heads, 64)
+        self.assertGreaterEqual(L.diag_sectors, disk.DIAG_MIN_SECTORS)
+        self.assertEqual(L.c_start % L.cylinder, 0)
+
+    def test_parse_size(self):
+        self.assertEqual(disk.parse_size('7962192'), 7962192)
+        self.assertEqual(disk.parse_size('4GB'), 4 * 10 ** 9 // 512)
+        self.assertEqual(disk.parse_size('2GiB'), 2 ** 31 // 512)
+        with self.assertRaises(ValueError):
+            disk.parse_size('lots')
+
+    def test_mbr_chs(self):
+        self.assertEqual(disk.chs(63, 128, 63), bytes([1, 1, 0]))
+        self.assertEqual(disk.chs(8064, 128, 63), bytes([0, 1, 1]))
+
+
+class FatTest(unittest.TestCase):
+    def build(self, fat12, nsectors, spc, entries):
+        z = zipfile.ZipFile(io.BytesIO(make_zip(entries)))
+        fd, path = tempfile.mkstemp()
+        os.close(fd)
+        self.addCleanup(os.remove, path)
+        with open(path, 'w+b') as img:
+            img.truncate(nsectors * 512)
+            w = FatWriter(img, 0, nsectors, spc, fat12, boot_template(), b'TEST', 0x1234, 16, 63)
+            w.populate(tree_from_archives([z]))
+        return path, z
+
+    def check(self, fat12, nsectors, spc):
+        entries = [('README.TXT', b'r' * 3000, 0x20), ('IO.SYS', b'i' * 5000, 0x27),
+                   ('MSDOS.SYS', b'm' * 1700, 0x27), ('LANG/', None, 0x30),
+                   ('LANG/ENG/OLANG.INF', b'[Languages]\r\nName=English\r\n', 0x20),
+                   ('SYSTEM.SAV/', None, 0x32), ('EMPTY.DAT', b'', 0x20)]
+        path, z = self.build(fat12, nsectors, spc, entries)
+        with open(path, 'rb') as f:
+            vol = FatReader(f, 0)
+            root = [n for n, *_ in vol.entries()]
+            self.assertEqual(root[:3], [b'IO.SYS', b'MSDOS.SYS', b'TEST'])
+            found = {p: (a, c, s) for p, a, c, s, _ in vol.walk()}
+            for p, (attr, cluster, size) in found.items():
+                if attr & ATTR_DIR:
+                    self.assertEqual(attr, ATTR_DIR, f'{p} must be a plain 0x10 directory')
+                else:
+                    data = vol.read_chain(cluster, size) if size else b''
+                    self.assertEqual(data, z.read(p.decode()), p)
+            self.assertEqual(found[b'IO.SYS'][0], 0x27)
+            self.assertEqual(found[b'IO.SYS'][1], 2, 'IO.SYS must start at the first cluster')
+        if shutil.which('fsck.fat'):
+            r = subprocess.run(['fsck.fat', '-n', path], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_fat12(self):
+        self.check(True, 8001, 2)
+
+    def test_fat16(self):
+        self.check(False, 70_000, 4)
+
+    def test_later_archive_overwrites(self):
+        a = zipfile.ZipFile(io.BytesIO(make_zip([('A.TXT', b'old', 0x20)])))
+        b = zipfile.ZipFile(io.BytesIO(make_zip([('A.TXT', b'new', 0x21)])))
+        tree = tree_from_archives([a, b])
+        node = tree.children[b'A.TXT']
+        self.assertEqual((node.source[0].read(node.source[1]), node.attr), (b'new', 0x21))
+
+
+if __name__ == '__main__':
+    unittest.main()

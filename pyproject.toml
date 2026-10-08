@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compaq-qrst-rebuild"
+dynamic = ["version"]
+description = "Rebuild Compaq Presario QuickRestore CDs (1995) into bootable raw disk images"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Nathan Nelson", email = "nrnelson@gmail.com"}]
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Archiving",
+    "Topic :: System :: Filesystems",
+]
+
+[project.scripts]
+compaq-qrst-rebuild = "compaq_qrst.cli:main"
+
+[tool.setuptools]
+packages = ["compaq_qrst"]
+
+[tool.setuptools.dynamic]
+version = {attr = "compaq_qrst.__version__"}
