@@ -43,6 +43,14 @@ the form `xxxxx-OEM-xxxxxxx-xxxxx`.
 The diagnostics partition is only started by a Compaq BIOS. On other machines, or in
 emulators, it's harmless and stays invisible.
 
+## "There is a problem with the Diagnostics Partition"
+
+Images built before this was fixed labelled the diagnostics partition `DIAGS` (as
+QuickRestore itself does). Computer Setup still works, but the Compaq Utilities show this
+warning and "Create a Diagnostics Diskette" fails, because they expect the label
+`DIAGSETUP`. Rebuild the image, or change the volume label of partition 1 (in its boot
+sector and its root-directory label entry) to `DIAGSETUP`.
+
 ## Hardware errors on a non-Compaq machine or in an emulator
 
 The image is configured for the Presario's own hardware (S3 Trio64V+ video, ESS ES1788

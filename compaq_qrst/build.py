@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from . import disk
 from .fat import FatWriter, tree_from_archives
 
-C_LABEL, DIAG_LABEL = b'PRESARIO', b'DIAGS'
+C_LABEL = b'PRESARIO'
+# Compaq's own installer (DOD.EXE) leaves the partition labelled DIAGSETUP, and its
+# "Create a Diagnostics Diskette" refuses a partition labelled DIAGS (QuickRestore's choice).
+DIAG_LABEL = b'DIAGSETUP'
 
 
 @dataclass

@@ -63,7 +63,7 @@ checked.
 | Sectors | Contents |
 |---|---|
 | 0 | MBR: Compaq's `MASTER.BOO` code with a new partition table |
-| 63 to the end of the first cylinder(s) | Partition 1, type `0x12`, FAT12, label `DIAGS`: Compaq Diagnostics |
+| 63 to the end of the first cylinder(s) | Partition 1, type `0x12`, FAT12, label `DIAGSETUP`: Compaq Diagnostics |
 | next cylinder boundary onwards | Partition 2, type `0x06`, active, FAT16, label `PRESARIO`: C: |
 
 **Partition type 0x12** is Compaq's "system partition". DOS and Windows don't recognise
@@ -72,6 +72,12 @@ you press **F10** at the blinking cursor in the top-right corner during the memo
 It contains its own DOS, `TEST.COM` as the shell, Compaq Diagnostics 10.06C and
 **Computer Setup** (`SETUP.EXE`). These Presarios keep their BIOS setup program on the
 disk rather than in ROM.
+
+**Volume label.** QuickRestore labels the partition `DIAGS`, but the Compaq Utilities
+expect `DIAGSETUP`, the label their own installer (`DOD.EXE`) leaves after copying the
+second (Setup) diskette. With `DIAGS`, Computer Setup still runs, but "Create a
+Diagnostics Diskette" stops with "There is a problem with the Diagnostics Partition", so
+the tool writes `DIAGSETUP`.
 
 **Geometry.** Windows 95 RTM boots with CHS-only code: the MBR, the FAT16 boot sector and
 IO.SYS all address the disk as cylinder/head/sector. That geometry has to match the BIOS,
