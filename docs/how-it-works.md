@@ -63,7 +63,7 @@ checked.
 | Sectors | Contents |
 |---|---|
 | 0 | MBR: Compaq's `MASTER.BOO` code with a new partition table |
-| 63 to the end of the first cylinder(s) | Partition 1, type `0x12`, FAT12, label `DIAGSETUP`: Compaq Diagnostics |
+| 63 to the end of the first cylinder(s) | Partition 1, type `0x12`, FAT12, labels `DIAGS` / `DIAGSETUP` (below): Compaq Diagnostics |
 | next cylinder boundary onwards | Partition 2, type `0x06`, active, FAT16, label `PRESARIO`: C: |
 
 **Partition type 0x12** is Compaq's "system partition". DOS and Windows don't recognise
@@ -73,11 +73,15 @@ It contains its own DOS, `TEST.COM` as the shell, Compaq Diagnostics 10.06C and
 **Computer Setup** (`SETUP.EXE`). These Presarios keep their BIOS setup program on the
 disk rather than in ROM.
 
-**Volume label.** QuickRestore labels the partition `DIAGS`, but the Compaq Utilities
-expect `DIAGSETUP`, the label their own installer (`DOD.EXE`) leaves after copying the
-second (Setup) diskette. With `DIAGS`, Computer Setup still runs, but "Create a
-Diagnostics Diskette" stops with "There is a problem with the Diagnostics Partition", so
-the tool writes `DIAGSETUP`.
+**Compaq's marks on the diagnostics partition.** Before the Compaq Utilities touch the
+partition they run `PARTABLE.EXE`, which reads the partition's boot sector and insists on
+`EISA` in the serial-number field (offset 0x27) and `DIAGS` as the boot-sector label.
+Anything else makes it exit with code 0xF6, and the Utilities report "There is a problem
+with the Diagnostics Partition" and refuse to make diagnostics diskettes. `DOD.EXE`
+separately checks the root-directory label, which its own installer sets to `DIAGSETUP`
+after copying the second (Setup) diskette. QuickRestore wrote neither mark, so the tool
+writes `EISA` + `DIAGS` in the boot sector and `DIAGSETUP` in the root directory, as a
+partition made by Compaq's own tools has.
 
 **Geometry.** Windows 95 RTM boots with CHS-only code: the MBR, the FAT16 boot sector and
 IO.SYS all address the disk as cylinder/head/sector. That geometry has to match the BIOS,

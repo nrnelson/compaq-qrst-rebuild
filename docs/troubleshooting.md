@@ -45,11 +45,12 @@ emulators, it's harmless and stays invisible.
 
 ## "There is a problem with the Diagnostics Partition"
 
-Images built before this was fixed labelled the diagnostics partition `DIAGS` (as
-QuickRestore itself does). Computer Setup still works, but the Compaq Utilities show this
-warning and "Create a Diagnostics Diskette" fails, because they expect the label
-`DIAGSETUP`. Rebuild the image, or change the volume label of partition 1 (in its boot
-sector and its root-directory label entry) to `DIAGSETUP`.
+Images built before this was fixed lack the marks Compaq's tools leave on the
+diagnostics partition (see [how it works](how-it-works.md#the-disk-layout)). Computer
+Setup still works, but the Compaq Utilities show this warning and "Create a Diagnostics
+Diskette" fails. Rebuild the image; `verify` reports an image without the marks. To fix a
+written disk in place, partition 1's boot sector needs `EISA` at offset 0x27 and the label
+`DIAGS` at 0x2B, and its root-directory label entry `DIAGSETUP`.
 
 ## Hardware errors on a non-Compaq machine or in an emulator
 
