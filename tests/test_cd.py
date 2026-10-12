@@ -1,6 +1,10 @@
 """End-to-end tests against the real CD. Skipped unless QRST_ISO points at CPQQRS73101.ISO.
 
     QRST_ISO=/path/to/CPQQRS73101.ISO python -m unittest -v
+
+QRST_DISKETTES may point at a directory holding DIAGNOSTICS-9548-20261012.img and
+SETUP-9548-20261012.img, a pair made by a real Presario 9548's Compaq Utilities, to
+compare the rebuilt diskettes against them.
 """
 import hashlib
 import os
@@ -9,10 +13,12 @@ import unittest
 
 from compaq_qrst.build import build_image
 from compaq_qrst.cd import QuickRestoreCD
+from compaq_qrst.diskettes import build_diskettes
 from compaq_qrst.fat import FatReader
 from compaq_qrst.verify import verify_image
 
 ISO = os.environ.get('QRST_ISO')
+REAL_DISKETTES = os.environ.get('QRST_DISKETTES')
 CF_4GB = 7_962_192          # the 4 GB CF card the 9548 image was hardware-tested on
 
 # Images for a 7,962,192-sector disk. The 9548 image was booted on a real Presario 9548.
@@ -22,6 +28,15 @@ EXPECTED = {
     '9548': 'd6df69b5848d658384221eef59ef02b3e1ad618d1197dd797c06e80f8a6ff465',
     '9564': '2a4954d0dd873a517aaad735f98b3c0c792023c61f331fd08b4a5e23abc1171d',
 }
+
+# Diskettes with the default stamp (the diagnostics' own file date), English.
+EXPECTED_DISKETTES = {
+    'DIAGNOSTICS': '7a3c51b4c32438a753cd8c788963a35c4e0af5d511efc19755b402c17993d73f',
+    'SETUP': '0656f70374b7db9c040e37c6f08fd353245a23346e1bbda378079f5664eb5188',
+}
+# When the real pair was made: the three ONELANGF files, then the two labels.
+REAL_STAMPS = [(2026, 10, 12, 18, 32, 28), (2026, 10, 12, 18, 32, 32), (2026, 10, 12, 18, 32, 34),
+               (2026, 10, 12, 18, 32, 34), (2026, 10, 12, 18, 36, 10)]
 
 
 @unittest.skipUnless(ISO, 'set QRST_ISO to the CPQQRS73101 CD image')
@@ -79,6 +94,24 @@ class CdTest(unittest.TestCase):
             f.write(b'\x67\x7b\x56\xc8DIAGSETUP  ')
         problems = verify_image(self.cd, m, out)
         self.assertTrue(any('EISA' in p for p in problems), problems)
+
+
+    def test_diskettes_are_reproducible(self):
+        disks = build_diskettes(self.cd, self.cd.find_model('9548'))
+        self.assertEqual({d.name: hashlib.sha256(d.image).hexdigest() for d in disks},
+                         EXPECTED_DISKETTES)
+
+    @unittest.skipUnless(REAL_DISKETTES, 'set QRST_DISKETTES to compare with real diskettes')
+    def test_diskettes_match_real_ones_except_slack(self):
+        stamps = iter(REAL_STAMPS)
+        for d in build_diskettes(self.cd, self.cd.find_model('9548'), when=lambda: next(stamps)):
+            with self.subTest(diskette=d.name):
+                with open(os.path.join(REAL_DISKETTES, f'{d.name}-9548-20261012.img'), 'rb') as f:
+                    real = bytearray(f.read())
+                for off, n in d.slack:
+                    real[off:off + n] = bytes(n)
+                self.assertEqual(hashlib.sha256(real).hexdigest(),
+                                 hashlib.sha256(d.image).hexdigest())
 
 
 if __name__ == '__main__':

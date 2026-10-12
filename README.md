@@ -139,6 +139,23 @@ Compaq's factory "first customer boot", and it needs a couple of restarts:
 
 The first boot is slower than usual. Remove any floppy disk before Setup restarts.
 
+## 7. Diagnostics diskettes (optional)
+
+The Compaq Utilities can back the diagnostics partition up onto a DIAGNOSTICS and a SETUP
+diskette. The tool builds the same pair from the CD, so you can make them without a
+working partition:
+
+```
+python -m compaq_qrst diskettes CPQQRS73101.ISO -o diskettes
+```
+
+This writes `diskettes/DIAGNOSTICS.img` and `diskettes/SETUP.img`. `--language` picks the
+language of the DIAGNOSTICS diskette's messages (English, French, German, Italian or
+Spanish; the default is English). Write each image to a 1.44 MB diskette, for example
+`sudo dd if=diskettes/DIAGNOSTICS.img of=/dev/fd0 bs=18k` on Linux, or
+`gw write --format ibm.1440 diskettes/DIAGNOSTICS.img` with a Greaseweazle. Boot from the
+DIAGNOSTICS diskette; it asks for SETUP when it needs it.
+
 ## Troubleshooting
 
 See [docs/troubleshooting.md](docs/troubleshooting.md): no boot / "Missing operating

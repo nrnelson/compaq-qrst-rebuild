@@ -2,12 +2,13 @@
 import io
 import os
 import shutil
+import struct
 import subprocess
 import tempfile
 import unittest
 import zipfile
 
-from compaq_qrst import disk, qrzip
+from compaq_qrst import disk, diskettes, qrzip
 from compaq_qrst.fat import ATTR_DIR, FatReader, FatWriter, tree_from_archives
 
 SFX_STUB = b'MZ' + bytes(510)
@@ -130,3 +131,40 @@ class FatTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DisketteTest(unittest.TestCase):
+    @staticmethod
+    def message_file(blobs):
+        """A DOD_MSG-style file: 11 language slots of (count, offset, ulen, clen), then data."""
+        hdr, data = bytearray(diskettes.MSG_HEADER), b''
+        for k, blob in enumerate(blobs):
+            struct.pack_into('<HIHH', hdr, 10 * k, 3, diskettes.MSG_HEADER + len(data),
+                             len(blob), 0)
+            data += blob
+        return bytes(hdr) + data
+
+    def test_one_language(self):
+        f = self.message_file([b'english', b'francais', b'deutsch'])
+        out = diskettes.one_language(f, 'FRENCH', b'DOD_MSG')
+        self.assertEqual(out[diskettes.MSG_HEADER:], b'francais')
+        self.assertEqual(struct.unpack_from('<HIHH', out, 10), (3, 0x6E, 8, 0))
+        self.assertEqual(out[:10] + out[20:diskettes.MSG_HEADER], bytes(diskettes.MSG_HEADER - 10))
+        with self.assertRaises(KeyError):
+            diskettes.one_language(f, 'SPANISH', b'DOD_MSG')
+
+    def test_rewrite_leaves_hole_like_dos(self):
+        fd = diskettes.Floppy(bytes(510) + b'\x55\xaa')
+        fd.write(b'A.TXT', b'a' * 600, (1995, 8, 10, 10, 6, 4))     # clusters 2-3
+        fd.write(b'B.TXT', b'b', (1995, 8, 10, 10, 6, 4))           # cluster 4
+        fd.write(b'A.TXT', b'A' * 10, (1995, 8, 10, 10, 6, 4))      # truncated, moved to 5
+        self.assertEqual([e[2] for e in fd.root if e], [5, 4])
+        self.assertEqual(fd.fat[2:6], [0, 0, 0xFFF, 0xFFF])
+
+    def test_executable_stamp(self):
+        fd = diskettes.Floppy(bytes(510) + b'\x55\xaa')
+        fd.write(b'DIAG.EXE', bytes(206066), (1995, 8, 10, 10, 6, 4))
+        fd.write(b'DIAG.INF', bytes(488), (1995, 8, 10, 10, 6, 4))
+        root = fd.image()[19 * 512:]
+        self.assertEqual(root[0x14:0x16], b'\x6b\x3e')     # as on a real DIAGNOSTICS diskette
+        self.assertEqual(root[32 + 0x14:32 + 0x16], b'\0\0')

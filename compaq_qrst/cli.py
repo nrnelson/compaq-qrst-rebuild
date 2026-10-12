@@ -6,6 +6,7 @@ import sys
 from . import __version__, disk
 from .build import build_image
 from .cd import KNOWN_ISOS, QuickRestoreCD, UnsupportedCD, sha256_file
+from .diskettes import LANGUAGES, build_diskettes
 from .iso9660 import IsoError
 from .verify import verify_image
 
@@ -91,6 +92,38 @@ def cmd_build(a):
     print('\nNext: write the image to the whole disk (README, section 5).')
 
 
+def _parse_when(text):
+    from datetime import datetime
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+        try:
+            t = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        if not 1980 <= t.year <= 2107:
+            break
+        return (t.year, t.month, t.day, t.hour, t.minute, t.second)
+    sys.exit(f'error: --date {text!r}: use YYYY-MM-DD [HH:MM[:SS]] between 1980 and 2107')
+
+
+def cmd_diskettes(a):
+    os.makedirs(a.output, exist_ok=True)
+    names = [os.path.join(a.output, f'{n}.img') for n in ('DIAGNOSTICS', 'SETUP')]
+    clash = [n for n in names if os.path.exists(n)]
+    if clash and not a.force:
+        sys.exit(f'error: {clash[0]} exists (use --force to overwrite)')
+    with _open_cd(a.iso) as cd:
+        try:
+            model = cd.find_model(a.model) if a.model else cd.models[0]
+        except KeyError as e:
+            sys.exit(f'error: {e.args[0]}')
+        disks = build_diskettes(cd, model, a.language, _parse_when(a.date) if a.date else None)
+    for d, path in zip(disks, names):
+        with open(path, 'wb') as f:
+            f.write(d.image)
+        print(f'Wrote {path}: 1.44 MB {d.name} diskette')
+    print('\nNext: write each image to a 1.44 MB diskette (README, section 7).')
+
+
 def cmd_verify(a):
     with _open_cd(a.iso, check=False) as cd:
         try:
@@ -128,6 +161,17 @@ def main(argv=None):
     p.add_argument('--no-verify', action='store_true', help='skip the read-back verification')
     p.add_argument('-f', '--force', action='store_true', help='overwrite the output file')
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser('diskettes', help='build the DIAGNOSTICS and SETUP diskette images')
+    p.add_argument('iso', help='QuickRestore CD image (.iso)')
+    p.add_argument('-o', '--output', required=True, help='directory for DIAGNOSTICS.img, SETUP.img')
+    p.add_argument('-m', '--model', help='model (all models on this CD share the diagnostics)')
+    p.add_argument('-l', '--language', default='ENGLISH', type=str.upper, choices=LANGUAGES,
+                   help='language of the DIAGNOSTICS diskette messages (default ENGLISH)')
+    p.add_argument('--date', help='date-time for the labels and trimmed message files, as '
+                   "'YYYY-MM-DD HH:MM'; default: the diagnostics' own file date")
+    p.add_argument('-f', '--force', action='store_true', help='overwrite existing images')
+    p.set_defaults(func=cmd_diskettes)
 
     p = sub.add_parser('verify', help='check an image or written disk against the CD')
     p.add_argument('iso', help='QuickRestore CD image (.iso)')

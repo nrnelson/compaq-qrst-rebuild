@@ -136,6 +136,35 @@ sequence then runs:
    Authenticity, device installation. When it succeeds it runs `PIPOST.BAT`, whose
    `PRECLEAN` removes the PISETUP lines from `AUTOEXEC.BAT`.
 
+## The diagnostics diskettes
+
+`diskettes` rebuilds the two 1.44 MB diskettes that the Compaq Utilities' "Create a
+Diagnostics Diskette" writes, by replaying what `DOD.EXE` does, from the CD's `DIAGS`
+archive:
+
+1. `FMT.COM` formats each diskette. Its boot sector exists on the CD only inside the
+   PKLITE-packed `FMT.COM`, so the tool unpacks it (`pklite.py` is a port of PKLITE's own
+   decompressor stub). The serial field is `EISA`; the boot-sector label is `DIAGS`, or
+   `DIAGSETU.P` on the SETUP diskette (DOD hands FMT its 8.3 spelling of DIAGSETUP).
+2. **DIAGNOSTICS:** `DFC.EXE` copies the files named in `DIAGDSK1.IN`, then only the first
+   entry of `DIAGMSG1.IN` (`-S`); `ONELANGF.EXE` then writes one-language copies of
+   `MSGDATA`, `DD_MSG` and `DOD_MSG` so that everything fits.
+3. **SETUP:** `DFC` copies `DIAGDSK2.IN`, then all of `DIAGMSG2.IN` (full message files).
+4. `DOD` adds the volume label (`DIAGS` / `DIAGSETUP`) and stamps every `.COM`/`.EXE`
+   directory entry with a checksum at offset 0x14: the byte-swapped complement of the sum
+   of its time, date and the two halves of its size.
+
+Files are placed the way DOS 6 places them: a new file takes the first free directory
+entry, an existing one (`LANGFILE` is copied twice onto SETUP) is truncated in place, and
+clusters are allocated after the last one handed out, which leaves the same one-cluster
+hole the real SETUP diskette has.
+
+Checked against a pair made by a real Presario 9548: every byte matches except file
+slack, the unused tail of each file's last sector. DOS filled that from whatever was in
+its buffers, so it can't be derived from the CD; the tool writes zeros there. The labels
+and trimmed message files carry the time the diskettes were made; the tool uses the
+diagnostics' own file date unless given `--date`.
+
 ## Verification
 
 `verify` (also run automatically after `build`) reads the image back with its own FAT
