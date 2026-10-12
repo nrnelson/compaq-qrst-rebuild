@@ -86,7 +86,7 @@ class FatWriter:
     """Formats a FAT12/16 volume inside an open image file and fills it from a Node tree."""
 
     def __init__(self, img, start, nsectors, sectors_per_cluster, fat12, boot_template,
-                 label, serial, heads, spt, root_entries=512):
+                 label, serial, heads, spt, root_entries=512, boot_label=None):
         self.img, self.start, self.spc, self.fat12 = img, start, sectors_per_cluster, fat12
         self.label = label
         self.root_sectors = root_entries * 32 // SECTOR
@@ -113,7 +113,9 @@ class FatWriter:
                          root_entries, nsectors if nsectors < 65536 else 0, 0xF8, fat_sectors,
                          spt, heads, start, 0 if nsectors < 65536 else nsectors)
         boot[0x24], boot[0x26] = 0x80, 0x29
-        struct.pack_into('<I11s8s', boot, 0x27, serial, label.ljust(11),
+        if isinstance(serial, int):
+            serial = struct.pack('<I', serial)
+        struct.pack_into('<4s11s8s', boot, 0x27, serial, (boot_label or label).ljust(11),
                          b'FAT12   ' if fat12 else b'FAT16   ')
         self._write_sectors(0, boot)
 
@@ -211,7 +213,7 @@ class FatReader:
         (self.bytes_per_sector, self.spc, reserved, nfats, root_entries, total16, _media,
          fat_sectors) = struct.unpack_from('<HBHBHHBH', bs, 0x0B)
         total = total16 or struct.unpack_from('<I', bs, 0x20)[0]
-        self.label = bs[0x2B:0x36].rstrip()
+        self.serial, self.label = bs[0x27:0x2B], bs[0x2B:0x36].rstrip()
         self.fat_start = start + reserved
         self.root_start = self.fat_start + nfats * fat_sectors
         self.root_sectors = root_entries * 32 // SECTOR

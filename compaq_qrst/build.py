@@ -6,9 +6,14 @@ from . import disk
 from .fat import FatWriter, tree_from_archives
 
 C_LABEL = b'PRESARIO'
-# Compaq's own installer (DOD.EXE) leaves the partition labelled DIAGSETUP, and its
-# "Create a Diagnostics Diskette" refuses a partition labelled DIAGS (QuickRestore's choice).
+# What Compaq's own installer (DOD.EXE) leaves on the diagnostics partition. PARTABLE.EXE,
+# which the Compaq Utilities run before touching the partition, insists on 'EISA' in the
+# boot sector's serial-number field and DIAGS as the boot-sector label, or it reports
+# "There is a problem with the Diagnostics Partition". DOD itself checks the root-directory
+# label, which it sets to DIAGSETUP after copying the second (SETUP) diskette.
 DIAG_LABEL = b'DIAGSETUP'
+DIAG_BOOT_LABEL = b'DIAGS'
+DIAG_SERIAL = b'EISA'
 
 
 @dataclass
@@ -28,8 +33,8 @@ def build_image(cd, model, out_path, disk_sectors, heads=None):
 
         diag = FatWriter(img, layout.diag_start, layout.diag_sectors,
                          2 if layout.diag_sectors < 8200 else 4, True,
-                         cd.boot_template('SYSTEM'), DIAG_LABEL, serial ^ 0x5A5A5A5A,
-                         layout.heads, layout.spt)
+                         cd.boot_template('SYSTEM'), DIAG_LABEL, DIAG_SERIAL,
+                         layout.heads, layout.spt, boot_label=DIAG_BOOT_LABEL)
         diag.populate(tree_from_archives([cd.archive(p) for p in model.diags]))
 
         c = FatWriter(img, layout.c_start, layout.c_sectors, layout.c_cluster_sectors, False,

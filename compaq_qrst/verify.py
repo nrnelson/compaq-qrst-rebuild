@@ -1,6 +1,7 @@
 """Check a built image (or a written disk) against the CD it was built from."""
 import struct
 
+from .build import DIAG_BOOT_LABEL, DIAG_SERIAL
 from .fat import ATTR_DIR, FatReader, tree_from_archives
 
 SECTOR = 512
@@ -34,6 +35,10 @@ def verify_image(cd, model, image_path, progress=None):
         for (_, _, start, _), paths, label in ((parts[0], model.diags, 'diagnostics'),
                                               (parts[1], model.c_drive, 'C:')):
             vol = FatReader(f, start)
+            if paths is model.diags and (vol.serial, vol.label) != (DIAG_SERIAL, DIAG_BOOT_LABEL):
+                problems.append(f'{label}: boot sector has serial {vol.serial!r} and label '
+                                f'{vol.label.decode("cp437")!r}; Compaq Utilities need '
+                                f'{DIAG_SERIAL!r} and {DIAG_BOOT_LABEL.decode()!r}')
             if vol.fats[0] != vol.fats[1]:
                 problems.append(f'{label}: the two FAT copies differ')
             expected = _expected(cd, paths)

@@ -17,10 +17,10 @@ CF_4GB = 7_962_192          # the 4 GB CF card the 9548 image was hardware-teste
 
 # Images for a 7,962,192-sector disk. The 9548 image was booted on a real Presario 9548.
 EXPECTED = {
-    '5528': 'd2c50e36ae2b37b94d2a5e8b746eea1fe4441a3633bb088d4d2b25fb5c02afbe',
-    '9546': 'ed7412e9fa527ea3336a0681e15f609b5ef0829dab25c4e509f15e9b2147c2e0',
-    '9548': '9b2115bee7265eb5f8b8af2f47ea76767741e21db8f64043c2f6808b072c1843',
-    '9564': 'c22932bc5ff88b53bc37fd6f5903c3d76514e4279a472131cadd84cdbeab77bd',
+    '5528': '50d8f7a66929a2d97a0aae0ec870cf18228c873cd7d87122478c94d39fb15241',
+    '9546': '074cb8f6cbe3b97a04d1a5013633c14c96bde0899fdb17083d81f15f89563b1c',
+    '9548': 'd6df69b5848d658384221eef59ef02b3e1ad618d1197dd797c06e80f8a6ff465',
+    '9564': '2a4954d0dd873a517aaad735f98b3c0c792023c61f331fd08b4a5e23abc1171d',
 }
 
 
@@ -68,6 +68,17 @@ class CdTest(unittest.TestCase):
             f.write(block)
         problems = verify_image(self.cd, m, out)
         self.assertTrue(any('PISETUP/LANG/ENG' in p and '0x30' in p for p in problems), problems)
+
+    def test_verify_catches_missing_eisa_marker(self):
+        """Without it the Compaq Utilities say "There is a problem with the Diagnostics Partition"."""
+        m = self.cd.find_model('9548')
+        out = os.path.join(self.tmp.name, 'noeisa.img')
+        build_image(self.cd, m, out, CF_4GB)
+        with open(out, 'r+b') as f:
+            f.seek(63 * 512 + 0x27)
+            f.write(b'\x67\x7b\x56\xc8DIAGSETUP  ')
+        problems = verify_image(self.cd, m, out)
+        self.assertTrue(any('EISA' in p for p in problems), problems)
 
 
 if __name__ == '__main__':
