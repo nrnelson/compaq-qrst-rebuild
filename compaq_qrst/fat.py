@@ -32,6 +32,7 @@ class Node:
         self.name, self.is_dir, self.attr, self.dt = name, is_dir, attr, dt
         self.children = {}      # upper-case raw 8.3 name -> Node, in insertion order
         self.source = None      # (ZipFile, ZipInfo) for files
+        self.data = None        # replacement contents, if the build changes this file
         self.size = 0
         self.cluster = 0
 
@@ -144,8 +145,8 @@ class FatWriter:
 
     def _place_file(self, node):
         z, zi = node.source
-        data = z.read(zi)
-        if zlib.crc32(data) & 0xFFFFFFFF != zi.CRC:
+        data = z.read(zi) if node.data is None else node.data
+        if node.data is None and zlib.crc32(data) & 0xFFFFFFFF != zi.CRC:
             raise ValueError(f'CRC mismatch extracting {zi.filename}')
         if node.size:
             node.cluster = self._alloc(node.size)

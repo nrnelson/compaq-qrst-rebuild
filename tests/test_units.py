@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import zipfile
 
-from compaq_qrst import disk, diskettes, qrzip
+from compaq_qrst import disk, diskettes, qrzip, userinfo
 from compaq_qrst.fat import ATTR_DIR, FatReader, FatWriter, tree_from_archives
 
 SFX_STUB = b'MZ' + bytes(510)
@@ -168,3 +168,22 @@ class DisketteTest(unittest.TestCase):
         root = fd.image()[19 * 512:]
         self.assertEqual(root[0x14:0x16], b'\x6b\x3e')     # as on a real DIAGNOSTICS diskette
         self.assertEqual(root[32 + 0x14:32 + 0x16], b'\0\0')
+
+
+class UserInfoTest(unittest.TestCase):
+    INF = (b'[Settings]\r\nPC_MFR_ID=X\r\n\r\n[userinfo]\r\n\r\nDefLang=ENG\r\n\r\n'
+           b';Username=\r\n;Company=\r\n\r\n; trailing comment\r\n\r\n[Network]\r\n')
+
+    def test_uncomments_documented_keys(self):
+        out = userinfo.patch_inf(self.INF, 'Test User', 'Test Co')
+        self.assertIn(b'\r\nUsername=Test User\r\nCompany=Test Co\r\n', out)
+        self.assertEqual(out.count(b'['), 3)
+
+    def test_adds_missing_key_after_last_setting(self):
+        out = userinfo.patch_inf(self.INF.replace(b';Company=\r\n', b''), company='Co')
+        self.assertIn(b'DefLang=ENG\r\nCompany=Co\r\n', out)
+
+    def test_rejects_unsafe_values(self):
+        for bad in ('', 'a;b', 'x' * 61, 'café', '[x]'):
+            with self.assertRaises(ValueError):
+                userinfo.check(user=bad)

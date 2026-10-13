@@ -7,6 +7,7 @@ from . import __version__, disk
 from .build import build_image
 from .cd import KNOWN_ISOS, QuickRestoreCD, UnsupportedCD, sha256_file
 from .diskettes import LANGUAGES, build_diskettes
+from .userinfo import check as check_userinfo
 from .iso9660 import IsoError
 from .verify import verify_image
 
@@ -52,9 +53,18 @@ def _target_sectors(a):
         sys.exit(f'error: {e}')
 
 
+def _userinfo(a):
+    try:
+        check_userinfo(a.user, a.company)
+    except ValueError as e:
+        sys.exit(f'error: {e}')
+    return {'user': a.user, 'company': a.company}
+
+
 def cmd_build(a):
     if os.path.exists(a.output) and not a.force:
         sys.exit(f'error: {a.output} exists (use --force to overwrite)')
+    info = _userinfo(a)
     sectors = _target_sectors(a)
     with _open_cd(a.iso) as cd:
         try:
@@ -70,14 +80,14 @@ def cmd_build(a):
               f'geometry {layout.heads} heads x {layout.spt} sectors')
         print('Building...', flush=True)
         try:
-            r = build_image(cd, model, a.output, sectors, a.heads)
+            r = build_image(cd, model, a.output, sectors, a.heads, **info)
         except Exception as e:  # noqa: BLE001 - report cleanly, remove the partial image
             if os.path.exists(a.output):
                 os.remove(a.output)
             sys.exit(f'error: {e}')
         if not a.no_verify:
             print('Verifying...', flush=True)
-            problems = verify_image(cd, model, a.output)
+            problems = verify_image(cd, model, a.output, **info)
             if problems:
                 print('\n'.join(problems[:20]), file=sys.stderr)
                 sys.exit(f'error: verification failed ({len(problems)} problems)')
@@ -131,11 +141,21 @@ def cmd_verify(a):
         except KeyError as e:
             sys.exit(f'error: {e.args[0]}')
         problems = verify_image(cd, model, a.image,
-                                progress=lambda label, n: print(f'{label}: {n} files checked'))
+                                progress=lambda label, n: print(f'{label}: {n} files checked'),
+                                **_userinfo(a))
     if problems:
         print('\n'.join(problems[:50]))
+        if any('PISETUP/PISETUP.INF' in p for p in problems):
+            print('(built with --user/--company? pass the same options to verify)')
         sys.exit(f'FAILED: {len(problems)} problems')
-    print('OK: image matches the CD exactly')
+    custom = ' (with the given user name/company)' if a.user or a.company else ' exactly'
+    print(f'OK: image matches the CD{custom}')
+
+
+def _userinfo_args(p, verify=False):
+    how = 'it was built with' if verify else 'to pre-fill in the Windows 95 Setup wizard'
+    p.add_argument('--user', help=f'user name {how}')
+    p.add_argument('--company', help=f'company name {how}')
 
 
 def main(argv=None):
@@ -158,6 +178,7 @@ def main(argv=None):
     g.add_argument('--size-of', metavar='DEVICE', help='read the size from a disk (Linux)')
     p.add_argument('--heads', type=int, choices=(16, 32, 64, 128, 255),
                    help="override the BIOS's translated head count")
+    _userinfo_args(p)
     p.add_argument('--no-verify', action='store_true', help='skip the read-back verification')
     p.add_argument('-f', '--force', action='store_true', help='overwrite the output file')
     p.set_defaults(func=cmd_build)
@@ -177,6 +198,7 @@ def main(argv=None):
     p.add_argument('iso', help='QuickRestore CD image (.iso)')
     p.add_argument('image', help='image file or disk device')
     p.add_argument('-m', '--model', required=True, help='model the image was built for')
+    _userinfo_args(p, verify=True)
     p.set_defaults(func=cmd_verify)
 
     a = ap.parse_args(argv)

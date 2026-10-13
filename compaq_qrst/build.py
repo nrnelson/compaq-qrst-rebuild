@@ -2,7 +2,7 @@
 import zlib
 from dataclasses import dataclass
 
-from . import disk
+from . import disk, userinfo
 from .fat import FatWriter, tree_from_archives
 
 C_LABEL = b'PRESARIO'
@@ -24,7 +24,10 @@ class BuildResult:
     c_used_bytes: int
 
 
-def build_image(cd, model, out_path, disk_sectors, heads=None):
+def build_image(cd, model, out_path, disk_sectors, heads=None, user=None, company=None):
+    """user/company pre-fill the Windows 95 Setup wizard (see userinfo.py)."""
+    c_tree = tree_from_archives([cd.archive(p) for p in model.c_drive])
+    userinfo.apply(c_tree, user, company)
     layout = disk.plan(disk_sectors, heads)
     serial = zlib.crc32(model.archive_stem.encode())
     with open(out_path, 'wb') as img:
@@ -39,5 +42,5 @@ def build_image(cd, model, out_path, disk_sectors, heads=None):
 
         c = FatWriter(img, layout.c_start, layout.c_sectors, layout.c_cluster_sectors, False,
                       cd.boot_template('PRIMARY'), C_LABEL, serial, layout.heads, layout.spt)
-        c.populate(tree_from_archives([cd.archive(p) for p in model.c_drive]))
+        c.populate(c_tree)
     return BuildResult(layout, c.nclusters, c.cluster_bytes, c.used_bytes)
