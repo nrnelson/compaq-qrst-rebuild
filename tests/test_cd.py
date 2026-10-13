@@ -99,8 +99,9 @@ class CdTest(unittest.TestCase):
     def test_user_info_is_prefilled_and_verified(self):
         m = self.cd.find_model('9548')
         out = os.path.join(self.tmp.name, 'user.img')
-        build_image(self.cd, m, out, CF_4GB, user='Test User', company='Test Co')
-        self.assertEqual(verify_image(self.cd, m, out, user='Test User', company='Test Co'), [])
+        answers = {'user': 'Test User', 'company': 'Test Co', 'coa': '12345-OEM-1234567-12345'}
+        build_image(self.cd, m, out, CF_4GB, **answers)
+        self.assertEqual(verify_image(self.cd, m, out, **answers), [])
         self.assertTrue(any('PISETUP/PISETUP.INF' in p for p in verify_image(self.cd, m, out)))
 
     def test_diskettes_are_reproducible(self):

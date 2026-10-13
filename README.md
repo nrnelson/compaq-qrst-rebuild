@@ -100,11 +100,10 @@ python -m compaq_qrst build CPQQRS73101.ISO --model 9548 --size 7962192 -o presa
 The image is built, then read back and compared file by file against the CD. Building
 takes a few seconds; the image is about 2 GB for any disk of 2 GB or more.
 
-To have the Windows 95 Setup wizard's first page already filled in, add
-`--user "Your Name"` and optionally `--company "Your Company"` (pass the same options to
-`verify`). The Certificate of Authenticity number still has to be typed at first boot:
-PISETUP only accepts a pre-loaded number when the manufacturer's OEM ID allows it, and
-Compaq's doesn't.
+To have the Windows 95 Setup wizard filled in, add `--user "Your Name"`,
+`--company "Your Company"` and `--coa 12345-OEM-1234567-12345` (the number from the
+Certificate of Authenticity sticker on the case). The wizard's pages still appear, but
+already filled in. Pass the same options to `verify`.
 
 ### What you get
 

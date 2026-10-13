@@ -24,10 +24,11 @@ class BuildResult:
     c_used_bytes: int
 
 
-def build_image(cd, model, out_path, disk_sectors, heads=None, user=None, company=None):
-    """user/company pre-fill the Windows 95 Setup wizard (see userinfo.py)."""
+def build_image(cd, model, out_path, disk_sectors, heads=None, user=None, company=None,
+                coa=None):
+    """user/company/coa pre-fill the Windows 95 Setup wizard (see userinfo.py)."""
     c_tree = tree_from_archives([cd.archive(p) for p in model.c_drive])
-    userinfo.apply(c_tree, user, company)
+    userinfo.apply(c_tree, user, company, coa)
     layout = disk.plan(disk_sectors, heads)
     serial = zlib.crc32(model.archive_stem.encode())
     with open(out_path, 'wb') as img:

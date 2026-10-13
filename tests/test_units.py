@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import zipfile
 
-from compaq_qrst import disk, diskettes, qrzip, userinfo
+from compaq_qrst import disk, diskettes, oemid, qrzip, userinfo
 from compaq_qrst.fat import ATTR_DIR, FatReader, FatWriter, tree_from_archives
 
 SFX_STUB = b'MZ' + bytes(510)
@@ -187,3 +187,37 @@ class UserInfoTest(unittest.TestCase):
         for bad in ('', 'a;b', 'x' * 61, 'café', '[x]'):
             with self.assertRaises(ValueError):
                 userinfo.check(user=bad)
+
+
+class OemIdTest(unittest.TestCase):
+    COMPAQ = 'Compaq Computer Corporation'
+
+    def test_decodes_compaqs_id(self):
+        self.assertEqual(oemid.manufacturer_hash(self.COMPAQ), 0x10F1D0A6)
+        self.assertEqual(oemid.decode('21B80F15D0DA6', self.COMPAQ), 0b100101)
+        self.assertEqual(oemid.encode(0b100101, self.COMPAQ), '21B80F15D0DA6')
+
+    def test_coa_flag(self):
+        # the ID that made PISETUP keep a pre-loaded COA number in an emulator
+        self.assertEqual(oemid.encode(0b101101, self.COMPAQ), '21E60F18D02A6')
+
+    def test_rejects_wrong_manufacturer_and_garbage(self):
+        self.assertEqual(oemid.decode('21B80F15D0DA6', 'Other Corp'), 0)
+        self.assertEqual(oemid.decode('ZZZ', self.COMPAQ), 0)
+        with self.assertRaises(ValueError):
+            oemid.encode(0b100, self.COMPAQ)
+
+
+class CoaTest(unittest.TestCase):
+    INF = (b'[Settings]\r\nPC_MFR_ID=21B80F15D0DA6\r\n\r\n[userinfo]\r\n'
+           b'DefLang=ENG\r\n;Username=\r\n\r\n[Network]\r\n')
+
+    def test_sets_id_and_number(self):
+        out = userinfo.patch_inf(self.INF, coa='12345-OEM-1234567-12345',
+                                 manufacturer='Compaq Computer Corporation')
+        self.assertIn(b'PC_MFR_ID=21E60F18D02A6\r\n', out)
+        self.assertIn(b'DefLang=ENG\r\nCOANUMBER=12345-OEM-1234567-12345\r\n', out)
+
+    def test_refuses_an_id_that_does_not_validate(self):
+        with self.assertRaises(ValueError):
+            userinfo.patch_inf(self.INF, coa='1', manufacturer='Other Corp')

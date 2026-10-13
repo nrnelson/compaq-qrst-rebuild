@@ -28,7 +28,7 @@ def _expected(cd, paths, fill=None):
     return out
 
 
-def verify_image(cd, model, image_path, progress=None, user=None, company=None):
+def verify_image(cd, model, image_path, progress=None, user=None, company=None, coa=None):
     """Return a list of problems (empty = image matches the CD exactly)."""
     problems = []
     with open(image_path, 'rb') as f:
@@ -47,7 +47,7 @@ def verify_image(cd, model, image_path, progress=None, user=None, company=None):
                                 f'{DIAG_SERIAL!r} and {DIAG_BOOT_LABEL.decode()!r}')
             if vol.fats[0] != vol.fats[1]:
                 problems.append(f'{label}: the two FAT copies differ')
-            expected = _expected(cd, paths, None if paths is model.diags else (user, company))
+            expected = _expected(cd, paths, None if paths is model.diags else (user, company, coa))
             seen = set()
             for path, attr, cluster, size, _raw in vol.walk():
                 if attr & ATTR_DIR:

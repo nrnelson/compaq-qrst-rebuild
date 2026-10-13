@@ -55,10 +55,10 @@ def _target_sectors(a):
 
 def _userinfo(a):
     try:
-        check_userinfo(a.user, a.company)
+        check_userinfo(a.user, a.company, a.coa)
     except ValueError as e:
         sys.exit(f'error: {e}')
-    return {'user': a.user, 'company': a.company}
+    return {'user': a.user, 'company': a.company, 'coa': a.coa}
 
 
 def cmd_build(a):
@@ -146,9 +146,9 @@ def cmd_verify(a):
     if problems:
         print('\n'.join(problems[:50]))
         if any('PISETUP/PISETUP.INF' in p for p in problems):
-            print('(built with --user/--company? pass the same options to verify)')
+            print('(built with --user/--company/--coa? pass the same options to verify)')
         sys.exit(f'FAILED: {len(problems)} problems')
-    custom = ' (with the given user name/company)' if a.user or a.company else ' exactly'
+    custom = ' (with the given setup answers)' if a.user or a.company or a.coa else ' exactly'
     print(f'OK: image matches the CD{custom}')
 
 
@@ -156,6 +156,8 @@ def _userinfo_args(p, verify=False):
     how = 'it was built with' if verify else 'to pre-fill in the Windows 95 Setup wizard'
     p.add_argument('--user', help=f'user name {how}')
     p.add_argument('--company', help=f'company name {how}')
+    p.add_argument('--coa', metavar='NUMBER',
+                   help=f'Certificate of Authenticity number {how}, e.g. 12345-OEM-1234567-12345')
 
 
 def main(argv=None):
