@@ -101,9 +101,11 @@ The image is built, then read back and compared file by file against the CD. Bui
 takes a few seconds; the image is about 2 GB for any disk of 2 GB or more.
 
 To have the Windows 95 Setup wizard filled in, add `--user "Your Name"`,
-`--company "Your Company"` and `--coa 12345-OEM-1234567-12345` (the number from the
+`--company "Your Company"` and `--coa 12395-OEM-0000007-12345` (the number from the
 Certificate of Authenticity sticker on the case). The wizard's pages still appear, but
-already filled in. Pass the same options to `verify`.
+already filled in. Pass the same options to `verify`. The COA number is checked with the
+same rules Windows 95 Setup uses, so a mistyped number stops the build instead of being
+refused at first boot.
 
 ### What you get
 

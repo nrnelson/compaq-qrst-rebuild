@@ -213,11 +213,39 @@ class CoaTest(unittest.TestCase):
            b'DefLang=ENG\r\n;Username=\r\n\r\n[Network]\r\n')
 
     def test_sets_id_and_number(self):
-        out = userinfo.patch_inf(self.INF, coa='12345-OEM-1234567-12345',
+        out = userinfo.patch_inf(self.INF, coa='12395-OEM-0000007-12345',
                                  manufacturer='Compaq Computer Corporation')
         self.assertIn(b'PC_MFR_ID=21E60F18D02A6\r\n', out)
-        self.assertIn(b'DefLang=ENG\r\nCOANUMBER=12345-OEM-1234567-12345\r\n', out)
+        self.assertIn(b'DefLang=ENG\r\nCOANUMBER=12395-OEM-0000007-12345\r\n', out)
 
     def test_refuses_an_id_that_does_not_validate(self):
         with self.assertRaises(ValueError):
             userinfo.patch_inf(self.INF, coa='1', manufacturer='Other Corp')
+
+
+class CoaValidationTest(unittest.TestCase):
+    """SETUPX PIDVALIDATE's rules for Windows 95 OEM COA numbers (product type 8)."""
+
+    def test_accepts_valid_keys_in_any_spacing_or_case(self):
+        for key in ('17395-OEM-0001974-49985', '17395oem000197449985', '17395 OEM 0001974 49985'):
+            self.assertIsNone(userinfo.coa_problem(key), key)
+            self.assertEqual(userinfo.normalize_coa(key), '17395-OEM-0001974-49985')
+        self.assertIsNone(userinfo.coa_problem('36602-OEM-0000007-00000'))
+
+    def test_rejects_each_rule(self):
+        bad = {
+            '17395-OEM-0001975-49985': 'multiple of 7',    # one-digit typo
+            '17395-OEM-0000070-49985': '1 to 7',           # sums to 7 but ends in 0
+            '37095-OEM-0001974-49985': 'day of the year',
+            '00095-OEM-0001974-49985': 'day of the year',
+            '17350-OEM-0001974-49985': 'year',
+            '17395-OEN-0001974-49985': 'OEM',
+            '17395-OEM-1001974-49985': 'start with 0',
+            '17395-OEM-0001974-4998A': 'digits',
+            '17395-OEM-0001974-4998': '20 characters',
+        }
+        for key, why in bad.items():
+            with self.subTest(key=key):
+                self.assertIn(why, userinfo.coa_problem(key) or '')
+                with self.assertRaises(ValueError):
+                    userinfo.check(coa=key)

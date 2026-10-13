@@ -18,17 +18,59 @@ from . import oemid
 PISETUP_INF = (b'PISETUP', b'PISETUP.INF')
 OEMINFO_INI = (b'WINDOWS', b'SYSTEM', b'OEMINFO.INI')
 _SAFE = re.compile(r'[ -~]{1,60}')      # printable ASCII
-COA_MAX = 23                            # PISETUP reads COANUMBER into a 24-byte buffer
+COA_FORMAT = 'DDDYY-OEM-0NNNNNN-NNNNN'
+
+
+def normalize_coa(coa):
+    """The COA number as PISETUP sees it: dashes and spaces dropped, re-dashed 5-3-7-5."""
+    s = coa.replace('-', '').replace(' ', '').upper()
+    if len(s) != 20:
+        raise ValueError(f'COA number {coa!r}: expected {COA_FORMAT} (20 characters without '
+                         f'the dashes), got {len(s)}')
+    return f'{s[:5]}-{s[5:8]}-{s[8:15]}-{s[15:]}'
+
+
+def coa_problem(coa):
+    """Why SETUPX's PIDVALIDATE would reject this Windows 95 OEM COA number, or None.
+
+    PISETUP validates the COA page with SETUPX.DLL PIDVALIDATE, product type "8" (OEM):
+    DDDYY-OEM-0NNNNNN-NNNNN with DDD a day 001-366, YY 95-99 or 00-02, 'OEM' in any
+    case, the 7-digit block starting with 0, ending in 1-7 and summing to a multiple of 7.
+    """
+    try:
+        key = normalize_coa(coa)
+    except ValueError as e:
+        return str(e)
+    day, year, oem, block, tail = key[:3], key[3:5], key[6:9], key[10:17], key[18:]
+    if not (day + year).isdigit():
+        return 'the first block must be 5 digits (day of year and year)'
+    if not 1 <= int(day) <= 366:
+        return f'the first three digits are a day of the year (001-366), not {day}'
+    if not (int(year) >= 95 or int(year) <= 2):
+        return f'digits 4-5 are the year (95-99 or 00-02), not {year}'
+    if oem != 'OEM':
+        return f"the second block must be OEM, not {oem}"
+    if not block.isdigit() or not tail.isdigit():
+        return 'the third and fourth blocks must be digits'
+    if block[0] != '0':
+        return 'the third block must start with 0'
+    if not '1' <= block[6] <= '7':
+        return 'the third block must end in a digit from 1 to 7'
+    if sum(map(int, block)) % 7:
+        return 'the digits of the third block must add up to a multiple of 7 (typo?)'
+    return None
 
 
 def check(user=None, company=None, coa=None):
-    """Raise ValueError if a value can't go into the INF as-is."""
+    """Raise ValueError if a value can't go into the INF, or Setup would refuse it."""
     for what, v in (('user name', user), ('company', company)):
         if v is not None and (not _SAFE.fullmatch(v) or set(v) & set(';"[]')):
             raise ValueError(f'{what}: use 1-60 printable ASCII characters without ; " [ ]')
-    if coa is not None and not re.fullmatch(r'[0-9A-Za-z-]{1,%d}' % COA_MAX, coa):
-        raise ValueError(f'COA number: up to {COA_MAX} letters, digits and dashes '
-                         '(e.g. 12345-OEM-1234567-12345)')
+    if coa is not None:
+        problem = coa_problem(coa)
+        if problem:
+            raise ValueError(f'COA number {coa!r} would be rejected by Windows 95 Setup: '
+                             f'{problem}')
 
 
 def _section(lines, name):
@@ -82,7 +124,7 @@ def patch_inf(inf, user=None, company=None, coa=None, manufacturer=None):
             raise ValueError(f'PC_MFR_ID {old!r} is not valid for {manufacturer!r}')
         new = oemid.encode(flags | oemid.FLAG_KEEP_COA, manufacturer)
         _set(lines, b'Settings', b'PC_MFR_ID', new.encode('ascii'))
-        _set(lines, b'userinfo', b'COANUMBER', coa.encode('ascii'))
+        _set(lines, b'userinfo', b'COANUMBER', normalize_coa(coa).encode('ascii'))
     return b'\r\n'.join(lines)
 
 

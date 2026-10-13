@@ -157,7 +157,7 @@ def _userinfo_args(p, verify=False):
     p.add_argument('--user', help=f'user name {how}')
     p.add_argument('--company', help=f'company name {how}')
     p.add_argument('--coa', metavar='NUMBER',
-                   help=f'Certificate of Authenticity number {how}, e.g. 12345-OEM-1234567-12345')
+                   help=f'Certificate of Authenticity number {how}, e.g. 12395-OEM-0000007-12345')
 
 
 def main(argv=None):
