@@ -35,8 +35,13 @@ it). If you copied the files to a disk some other way, make sure no directory un
 
 ## Setup asks for a Certificate of Authenticity number
 
-That's normal: it's the 25-character number on the Microsoft COA sticker on the case, in
-the form `xxxxx-OEM-xxxxxxx-xxxxx`.
+That's normal: it's the number on the Microsoft COA sticker on the case, in the form
+`DDDYY-OEM-0NNNNNN-NNNNN`. Build with `--coa` to have it filled in already.
+
+If Setup says "The Certificate of Authenticity number you entered is not valid", it was
+mistyped: Setup checks the digits (see
+[how it works](how-it-works.md#the-first-customer-boot)). `--coa` applies the same check
+when the image is built, and says which part is wrong.
 
 ## F10 does nothing
 

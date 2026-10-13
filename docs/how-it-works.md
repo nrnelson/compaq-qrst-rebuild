@@ -147,7 +147,25 @@ digits must equal a weighted sum of the characters of `Manufacturer=` in
 `WINDOWS\SYSTEM\OEMINFO.INI`, and the other 5 encode a set of feature flags (see
 `oemid.py`). Compaq's `21B80F15D0DA6` has flags 0, 2 and 5; flag 3 keeps a pre-loaded COA
 number. With `--coa` the tool decodes Compaq's ID and re-encodes it with flag 3 added
-(`21E60F18D02A6`), leaving the other flags alone.
+(`21E60F18D02A6`), leaving the other flags alone. The flags this PISETUP tests:
+
+| Flag | Allows |
+|---|---|
+| 0 | the ID at all (required) |
+| 1 | the `SelectWindowsVerDialogs` / `DualInstall2` options (choosing between preinstalled Windows versions) |
+| 2 | `Win95Install` mode, which skips the version, language, keyboard, regional and hardware-detection pages |
+| 3 | keeping a pre-loaded `COANUMBER=` |
+| 4 | `BatchInstall` mode, which also skips the "Configuring the computer" and "Finish" pages |
+
+Flags 1, 2 and 4 only permit the INF option; Compaq's INF sets none of those options.
+Compaq's flag 5 isn't tested anywhere in PISETUP, and 6-15 are unused.
+
+**Checking the COA number.** On the COA page PISETUP drops dashes and spaces, re-inserts
+them as 5-3-7-5, and calls `PIDVALIDATE` in its `SETUPX.DLL` with product type 8 (OEM).
+That accepts `DDDYY-OEM-0NNNNNN-NNNNN` where `DDD` is a day 001-366, `YY` is 95-99 or
+00-02, `OEM` may be in any case, the 7-digit block starts with 0, ends in 1-7 and its
+digits add up to a multiple of 7, and the last block is 5 digits. `--coa` applies the
+same rules, so a mistyped number stops the build instead of the first boot.
 
 ## The diagnostics diskettes
 
